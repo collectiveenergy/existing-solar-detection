@@ -1,0 +1,4 @@
+Scored sites: 57 (49 with solar, 8 without); not scored: 16 without a result, 0 unlabeled
+roof only (has_solar): found 25 of 49 solar sites (recall 51%); 1 false alarms among 8 no-solar sites; precision 96%
+roof or nearby (has_solar or solar_nearby): found 28 of 49 solar sites (recall 57%); 5 false alarms among 8 no-solar sites; precision 85%
+outline may be a carport (not counted as has_solar): 4 sites
