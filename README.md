@@ -14,6 +14,6 @@ Flags health center sites whose building already has rooftop solar, using free p
 
 **Sites files:** `test_sites.csv` (9 sites, Santa Clara/San Mateo; roofs checked against current satellite views). `known_solar_test.csv` (those 9 plus 64 sites and organizations with rooftop solar in a 2025 check, in CA, HI, IL, MA, NJ and WA).
 
-**Flags:** `has_solar` (panels on the roof, outline shrunk 1.5 m); `outline_may_be_carport` (the building outline is more than 60% panels, so the site point is probably on a carport or canopy; check the point); `solar_nearby` (confident, panel-shaped areas on open ground within 30 m; may be another parcel, so check). `naip_years` lists every NAIP year available at the site.
+**Flags:** `has_solar` (panels on the roof, outline shrunk 1.5 m); `outline_may_be_carport` (the building outline is more than 90% panels, so the site point is probably on a carport or canopy; check the point); `solar_nearby` (confident, panel-shaped areas on open ground within 30 m; may be another parcel, so check). `naip_years` lists every NAIP year available at the site.
 
 **Limits:** panels installed after the photo date are missed. Dark roofs, skylights and rooftop equipment can cause false alarms. Tall downtown buildings are harder because of lean and shadows. Panels next to the building (`solar_nearby`) may sit on a different parcel; NAIP photos cannot show ownership, so those are flagged for a check, not counted as the site's solar. Check flagged sites against a current satellite view.

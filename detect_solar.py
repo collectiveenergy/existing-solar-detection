@@ -37,7 +37,8 @@ PROB = 0.5             # pixel counts as panel at this model probability
 MIN_ROOF_M2 = float(os.environ.get("MIN_ROOF_M2", "15"))   # ~8 panels; has_solar needs at least this on the roof
 MIN_ROOF_SHARE = float(os.environ.get("MIN_ROOF_SHARE", "0.02"))
 ROOF_INSET_M = 1.5     # roof outline shrunk by this much, so plants and shadows at the edge don't count
-CARPORT_SHARE = 0.6    # "roof" more than 60% panels: almost surely a carport or panel canopy, not a clinic roof
+CARPORT_SHARE = 0.9    # "roof" over 90% panels (photo as is): a carport or panel canopy, not a clinic roof
+                       # (test Nov 10: carports 0.999; fully covered real roofs 0.52-0.78)
 NEAR_PROB = 0.8        # nearby panels: only confident pixels...
 NEAR_MIN_M2 = 20       # ...in blobs of at least 20 m2...
 NEAR_RECT = 0.6        # ...that fill at least 60% of their bounding rectangle (panel rows do; cars, asphalt don't)
@@ -333,7 +334,7 @@ def main(sites_csv, out_prefix):
             found = bool(best["roof_pv_m2"] >= MIN_ROOF_M2 and best["roof_pv_share"] >= MIN_ROOF_SHARE)
             # a "roof" that is mostly panels is a carport / canopy that Overture maps as a building:
             # the site point is probably on it rather than on the clinic, so flag it instead of has_solar
-            rec["outline_may_be_carport"] = bool(found and best["roof_pv_share"] >= CARPORT_SHARE)
+            rec["outline_may_be_carport"] = bool(found and (n1["roof_pv_share"] or 0) >= CARPORT_SHARE)
             rec["has_solar"] = found and not rec["outline_may_be_carport"]
             rec["solar_nearby"] = bool(max(n1["nearby_pv_m2"], n2["nearby_pv_m2"]) >= 4 * MIN_ROOF_M2)
             rec["status"] = "ok"
