@@ -1,0 +1,12 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
+torchvision==0.20.1
+numpy<2.2
+pandas
+shapely>=2.0
+pyproj
+rasterio
+duckdb
+pystac-client
+planetary-computer
+matplotlib

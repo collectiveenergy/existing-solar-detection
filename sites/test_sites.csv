@@ -1,0 +1,10 @@
+site_id,site_name,address,lat,lon,expected_roof_solar,expected_note
+BPS-H80-002441,Valley Health Center Tully,"500 Tully Rd, San Jose, CA",37.304951,-121.849543,no,roof clear; site point is on a solar carport lot
+BPS-H80-005308,GARDNER HEALTH CENTER,"195 E Virginia St, San Jose, CA",37.326101,-121.877874,no,roof clear
+BPS-H80-000989,ST. JAMES HEALTH CENTER,"55 E Julian St, San Jose, CA",37.341442,-121.89277,no,roof clear
+BPS-H80-030468,Mayview Community Health Center Mountain VIew a member of Ravenswood Family Health Network,"900 Miramonte Ave, Mountain View, CA",37.387244,-122.088671,no,roof clear
+BPS-H80-006870,Coastside Health Center,"225 Cabrillo Hwy S, Ste 100A, Half Moon Bay, CA",37.46486,-122.432834,no,roof clear
+BPS-H80-005448,Fair Oaks Health Center,"2710 Middlefield Rd, Redwood City, CA",37.475541,-122.21186,no,roof clear
+BPS-H80-007636,Valley Health Center Gilroy,"7475 Camino Arroyo, Gilroy, CA",37.011222,-121.557062,no,roof clear; large solar carports next to the building
+BPS-H80-002338,Indian Health Center of Santa Clara Valley - Main Clinic,"1333 Meridian Ave, San Jose, CA",37.301765,-121.914079,no,roof clear
+BPS-H80-013449,Ravenswood Family Health Center,"1885 Bay Rd, East Palo Alto, CA",37.472904,-122.132485,yes,roof covered with panels (known case)

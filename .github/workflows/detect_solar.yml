@@ -1,0 +1,98 @@
+# Existing rooftop solar check (detect_solar.py). Runs only with the "Run workflow" button
+# (never on push), on the sites file chosen there. Big lists can be split into parts that run side
+# by side; a last step merges them. Saves results/<name>_results.csv, results/<name>_summary.txt
+# (when the file has expected_roof_solar) and pictures in results/chips/<name>/.
+# Public repo: Actions minutes are free.
+name: Detect existing solar
+on:
+  workflow_dispatch:
+    inputs:
+      sites:
+        description: "Sites file (CSV in sites/)"
+        default: "sites/test_sites.csv"
+        required: true
+      parts:
+        description: "Split into this many parts run side by side (1-20; ~100 sites per part)"
+        default: "1"
+        required: true
+permissions:
+  contents: write
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.p.outputs.shards }}
+      name: ${{ steps.p.outputs.name }}
+    steps:
+      - id: p
+        run: |
+          n=${{ inputs.parts }}; n=$(( n < 1 ? 1 : (n > 20 ? 20 : n) ))
+          echo "shards=[$(seq -s, 0 $((n-1)))]" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename '${{ inputs.sites }}' .csv)" >> "$GITHUB_OUTPUT"
+  detect:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.shards) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: actions/cache@v4
+        with:
+          path: weights
+          key: pv-deeplabv3-zenodo-10036926
+      - run: pip install -r requirements.txt
+      - name: Detect
+        env:
+          SHARD: ${{ matrix.shard }}
+          NSHARDS: ${{ strategy.job-total }}
+        run: |
+          set -o pipefail
+          python -u detect_solar.py "${{ inputs.sites }}" "results/${{ needs.plan.outputs.name }}" 2>&1 \
+            | tee "results/${{ needs.plan.outputs.name }}_log${{ matrix.shard }}.txt"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: part-${{ matrix.shard }}
+          path: results/
+          retention-days: 3
+  save:
+    needs: [plan, detect]
+    if: always() && needs.plan.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pandas shapely
+      - uses: actions/download-artifact@v4
+        with:
+          path: results/
+          pattern: part-*
+          merge-multiple: true
+      - name: Merge parts
+        run: |
+          name="${{ needs.plan.outputs.name }}"
+          if ls results/${name}_part*.csv >/dev/null 2>&1; then python detect_solar.py combine "results/${name}"; fi
+          cat results/${name}_log*.txt > "results/${name}_log.txt" && rm -f results/${name}_log[0-9]*.txt
+          [ -f "results/${name}_summary.txt" ] && cat "results/${name}_summary.txt" >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Save results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898732+github-actions[bot]@users.noreply.github.com"
+          git add results/
+          if ! git diff --cached --quiet; then
+            git commit -m "Existing solar check: ${{ needs.plan.outputs.name }}"
+            git pull --rebase origin "${GITHUB_REF_NAME}" || true
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+          fi
