@@ -36,6 +36,11 @@ MARGIN_M = 35          # photo crop margin around the building
 PROB = 0.5             # pixel counts as panel at this model probability
 MIN_ROOF_M2 = float(os.environ.get("MIN_ROOF_M2", "15"))   # ~8 panels; has_solar needs at least this on the roof
 MIN_ROOF_SHARE = float(os.environ.get("MIN_ROOF_SHARE", "0.02"))
+ROOF_INSET_M = 1.5     # roof outline shrunk by this much, so plants and shadows at the edge don't count
+CARPORT_SHARE = 0.6    # "roof" more than 60% panels: almost surely a carport or panel canopy, not a clinic roof
+NEAR_PROB = 0.8        # nearby panels: only confident pixels...
+NEAR_MIN_M2 = 20       # ...in blobs of at least 20 m2...
+NEAR_RECT = 0.6        # ...that fill at least 60% of their bounding rectangle (panel rows do; cars, asphalt don't)
 WEIGHTS_URL = "https://zenodo.org/records/10036926/files/PV-Segmentation-deeplabv3.pt?download=1"
 WEIGHTS = os.environ.get("WEIGHTS_PATH", "weights/PV-Segmentation-deeplabv3.pt")
 STAC = "https://planetarycomputer.microsoft.com/api/stac/v1"
@@ -113,6 +118,7 @@ def naip_crop(catalog, geom_ll):
     if not items:
         return None
     items.sort(key=lambda it: it.datetime, reverse=True)
+    years = ",".join(sorted({str(it.datetime.year) for it in items}))
     for it in items[:3]:                      # newest first; skip a photo that does not cover the whole crop
         href = planetary_computer.sign(it.assets["image"].href)
         with rasterio.open(href) as src:
@@ -125,7 +131,7 @@ def naip_crop(catalog, geom_ll):
             win = from_bounds(x0, y0, x1, y1, src.transform).round_offsets().round_lengths()
             rgb = src.read([1, 2, 3], window=win)
             return (np.moveaxis(rgb, 0, -1), src.window_transform(win), src.crs,
-                    it.datetime.date().isoformat(), abs(src.transform.a), it.id)
+                    it.datetime.date().isoformat(), abs(src.transform.a), it.id, years)
     return None
 
 
@@ -176,11 +182,32 @@ def predict(model, rgb, scale):
 
 
 # ---------------------------------------------------------------- per-site numbers and picture
+def panel_blobs(prob, gsd):
+    """Pixels in confident, panel-shaped blobs (for the nearby ring): drops cars, asphalt and trees."""
+    from rasterio.features import shapes
+    from shapely.geometry import shape
+    keep = np.zeros(prob.shape, bool)
+    conf = (prob >= NEAR_PROB).astype(np.uint8)
+    if not conf.any():
+        return keep
+    from rasterio.features import rasterize
+    good = []
+    for geom, v in shapes(conf, mask=conf.astype(bool)):
+        g = shape(geom)
+        area = g.area * gsd * gsd
+        rect = g.minimum_rotated_rectangle.area
+        if area >= NEAR_MIN_M2 and rect > 0 and g.area / rect >= NEAR_RECT:
+            good.append(g)
+    if good:
+        keep = rasterize(good, out_shape=prob.shape).astype(bool)
+    return keep
+
+
 def site_numbers(prob, roof_mask, near_mask, gsd):
     px = gsd * gsd
     hit = prob >= PROB
     roof_px = int(roof_mask.sum())
-    roof_hit, near_hit = hit & roof_mask, hit & near_mask
+    roof_hit, near_hit = hit & roof_mask, panel_blobs(prob, gsd) & near_mask
     return dict(roof_pv_m2=round(roof_hit.sum() * px, 1),
                 roof_pv_share=round(roof_hit.sum() / roof_px, 4) if roof_px else np.nan,
                 roof_pv_conf=round(float(prob[roof_hit].mean()), 3) if roof_hit.any() else np.nan,
@@ -235,6 +262,8 @@ def score(out):
         tp, fp, fn, tn = int((f & y).sum()), int((f & ~y).sum()), int((~f & y).sum()), int((~f & ~y).sum())
         lines.append(f"{name}: found {tp} of {tp + fn} solar sites (recall {tp / max(tp + fn, 1):.0%}); "
                      f"{fp} false alarms among {fp + tn} no-solar sites; precision {tp / max(tp + fp, 1):.0%}")
+    if "outline_may_be_carport" in ok:
+        lines.append(f"outline may be a carport (not counted as has_solar): {int(ok.outline_may_be_carport.fillna(False).astype(bool).sum())} sites")
     return "\n".join(lines)
 
 
@@ -279,7 +308,7 @@ def main(sites_csv, out_prefix):
                 rec.update(status="no NAIP photo")
                 recs.append(rec)
                 continue
-            rgb, tr, crs, date, gsd, item = got
+            rgb, tr, crs, date, gsd, item, years = got
             to_r = Transformer.from_crs("EPSG:4326", crs, always_xy=True).transform
             g = reproject(geom_ll, to_r)
             # nearby ring: open ground around the building (parking, carports, ground mounts); other
@@ -289,19 +318,27 @@ def main(sites_csv, out_prefix):
             if other_r is not None and not other_r.is_empty:
                 near = near.difference(other_r.difference(g))
             shape = rgb.shape[:2]
-            roof_mask = rasterize([g], out_shape=shape, transform=tr).astype(bool)
+            g_in = g.buffer(-ROOF_INSET_M)
+            if g_in.is_empty or g_in.area < 0.5 * g.area:
+                g_in = g            # small or narrow building: keep the full outline
+            roof_mask = rasterize([g_in], out_shape=shape, transform=tr).astype(bool)
             near_mask = rasterize([near], out_shape=shape, transform=tr).astype(bool) if not near.is_empty else np.zeros(shape, bool)
             p1, p2 = predict(model, rgb, 1), predict(model, rgb, 2)
             n1, n2 = site_numbers(p1, roof_mask, near_mask, gsd), site_numbers(p2, roof_mask, near_mask, gsd)
-            rec.update(naip_date=date, naip_item=item, naip_gsd_m=round(gsd, 2), roof_sqft=round(n1["roof_m2"] * SQFT))
+            rec.update(naip_date=date, naip_years=years, naip_item=item, naip_gsd_m=round(gsd, 2),
+                       roof_sqft=round(g.area * SQFT))
             for k in ["roof_pv_m2", "roof_pv_share", "roof_pv_conf", "nearby_pv_m2"]:
                 rec[f"{k}_1x"], rec[f"{k}_2x"] = n1[k], n2[k]
             best = max((n1, n2), key=lambda n: n["roof_pv_m2"])
-            rec["has_solar"] = bool(best["roof_pv_m2"] >= MIN_ROOF_M2 and best["roof_pv_share"] >= MIN_ROOF_SHARE)
+            found = bool(best["roof_pv_m2"] >= MIN_ROOF_M2 and best["roof_pv_share"] >= MIN_ROOF_SHARE)
+            # a "roof" that is mostly panels is a carport / canopy that Overture maps as a building:
+            # the site point is probably on it rather than on the clinic, so flag it instead of has_solar
+            rec["outline_may_be_carport"] = bool(found and best["roof_pv_share"] >= CARPORT_SHARE)
+            rec["has_solar"] = found and not rec["outline_may_be_carport"]
             rec["solar_nearby"] = bool(max(n1["nearby_pv_m2"], n2["nearby_pv_m2"]) >= 4 * MIN_ROOF_M2)
             rec["status"] = "ok"
             miss = expected in ("yes", "no") and rec["has_solar"] != (expected == "yes")
-            if all_chips or rec["has_solar"] or rec["solar_nearby"] or miss or expected == "yes":
+            if all_chips or rec["has_solar"] or rec["solar_nearby"] or rec["outline_may_be_carport"] or miss or expected == "yes":
                 inv = ~tr
                 fn = re.sub(r"[^A-Za-z0-9_-]", "_", r.site_id) + ".png"
                 save_chip(os.path.join(chips, fn),
@@ -311,8 +348,8 @@ def main(sites_csv, out_prefix):
                           rgb, p1, p2, pixel_rings(g, inv), pixel_rings(g.buffer(NEARBY_M), inv))
                 rec["chip"] = f"chips/{name}/{fn}"
             log(f"[{i}/{len(sites)}] {r.site_id}: NAIP {date} ({gsd:.2f} m), roof {rec['roof_sqft']} sqft, roof panels "
-                f"{n1['roof_pv_m2']}/{n2['roof_pv_m2']} m2, nearby {n1['nearby_pv_m2']}/{n2['nearby_pv_m2']} m2 "
-                f"-> has_solar={rec['has_solar']}" + (f" (expected {expected})" if expected else ""))
+                f"{n1['roof_pv_m2']}/{n2['roof_pv_m2']} m2, nearby {n1['nearby_pv_m2']}/{n2['nearby_pv_m2']} m2, "
+                f"NAIP years {years} -> has_solar={rec['has_solar']}" + (" (outline may be a carport)" if rec["outline_may_be_carport"] else "") + (f" (expected {expected})" if expected else ""))
         except Exception as e:
             rec["status"] = f"error: {type(e).__name__}: {str(e)[:150]}"
             log(f"[{i}/{len(sites)}] {r.site_id}: {rec['status']}")
