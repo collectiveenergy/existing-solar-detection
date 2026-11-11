@@ -1,0 +1,19 @@
+[     0s] 9 sites from sites/test_sites.csv (part 1 of 1)
+[    47s] Overture release 2026-10-21.0: 512 building files
+[    50s] building outlines: 9 of 9
+[    53s] downloading model weights (245 MB, Zenodo 10036926)
+[   115s] model ready (DeepLabV3, torch 2.5.1+cpu, torchvision 0.20.1+cpu)
+[   121s] [1/9] BPS-H80-002441: NAIP 2022-05-19 (0.60 m), roof 9521 sqft, roof panels 867.2/356.8 m2, nearby 352.4/104.8 m2 -> has_solar=True (expected no)
+[   124s] [2/9] BPS-H80-005308: NAIP 2022-05-19 (0.60 m), roof 10509 sqft, roof panels 0.0/0.0 m2, nearby 154.8/37.4 m2 -> has_solar=False (expected no)
+[   128s] [3/9] BPS-H80-000989: NAIP 2022-05-19 (0.60 m), roof 6820 sqft, roof panels 0.0/0.0 m2, nearby 0.0/0.0 m2 -> has_solar=False (expected no)
+[   131s] [4/9] BPS-H80-030468: NAIP 2022-05-19 (0.60 m), roof 9436 sqft, roof panels 0.0/0.0 m2, nearby 0.0/23.4 m2 -> has_solar=False (expected no)
+[   134s] [5/9] BPS-H80-006870: NAIP 2022-05-18 (0.60 m), roof 12512 sqft, roof panels 0.0/0.0 m2, nearby 0.0/0.0 m2 -> has_solar=False (expected no)
+[   137s] [6/9] BPS-H80-005448: NAIP 2022-05-18 (0.60 m), roof 11850 sqft, roof panels 0.0/28.4 m2, nearby 0.0/27.4 m2 -> has_solar=True (expected no)
+[   139s] [7/9] BPS-H80-007636: NAIP 2022-05-14 (0.60 m), roof 5735 sqft, roof panels 483.5/369.7 m2, nearby 614.9/152.3 m2 -> has_solar=True (expected no)
+[   142s] [8/9] BPS-H80-002338: NAIP 2022-05-19 (0.60 m), roof 11087 sqft, roof panels 0.0/0.0 m2, nearby 188.3/0.4 m2 -> has_solar=False (expected no)
+[   145s] [9/9] BPS-H80-013449: NAIP 2022-05-18 (0.60 m), roof 18817 sqft, roof panels 0.0/163.4 m2, nearby 0.0/0.0 m2 -> has_solar=True (expected yes)
+[   145s] wrote results/test_sites_results.csv
+[   145s] 
+Scored sites: 9 (1 with solar, 8 without); not scored: 0 without a result, 0 unlabeled
+roof only (has_solar): found 1 of 1 solar sites (recall 100%); 3 false alarms among 8 no-solar sites; precision 25%
+roof or nearby (has_solar or solar_nearby): found 1 of 1 solar sites (recall 100%); 5 false alarms among 8 no-solar sites; precision 17%
